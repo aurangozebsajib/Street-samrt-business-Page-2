@@ -1,1 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opportunity Builder — Street Smart Business Lab</title>
+<meta name="description" content="Internal tool: create, validate, and export opportunity data for the Street Smart Business Lab Explorer.">
+<link rel="stylesheet" href="builder.css">
+</head>
+<body>
 
+<!-- ================= TOP BAR ================= -->
+<header class="builder-topbar">
+  <div class="builder-topbar-inner">
+    <div class="brand">
+      Street Smart <span class="brand-mark">Business Lab</span>
+      <span class="brand-tool">Opportunity Builder</span>
+    </div>
+    <div class="topbar-meta">
+      <span id="recordCount" class="record-count">0 opportunities</span>
+    </div>
+  </div>
+</header>
+
+<main class="builder-main">
+
+  <!-- ================= STATUS / ERROR BANNER ================= -->
+  <div class="status-banner" id="statusBanner" role="status" hidden></div>
+
+  <!-- ================= TOOLBAR ================= -->
+  <div class="toolbar">
+    <button type="button" class="btn btn-primary btn-add" id="addIdeaBtn">
+      <span aria-hidden="true">+</span> Add Idea
+    </button>
+
+    <div class="toolbar-search">
+      <input type="search" id="listSearch" placeholder="Search by title, tag, or industry…" aria-label="Search opportunities">
+    </div>
+
+    <div class="toolbar-filters">
+      <select id="filterIndustry" aria-label="Filter by industry">
+        <option value="">All industries</option>
+      </select>
+      <select id="filterDifficulty" aria-label="Filter by difficulty">
+        <option value="">All difficulty</option>
+      </select>
+      <button type="button" class="btn btn-text" id="clearListFiltersBtn">Clear</button>
+    </div>
+
+    <div class="toolbar-io">
+      <button type="button" class="btn btn-secondary" id="importBtn">Import JSON</button>
+      <input type="file" id="importFileInput" accept="application/json,.json" hidden>
+      <button type="button" class="btn btn-primary" id="exportBtn">Export JSON</button>
+    </div>
+  </div>
+
+  <!-- ================= TABLE ================= -->
+  <div class="table-wrap">
+    <table class="op-table" id="opTable">
+      <thead>
+        <tr>
+          <th class="col-id">ID</th>
+          <th class="col-title">Title</th>
+          <th class="col-industry">Industry</th>
+          <th class="col-capital">Capital</th>
+          <th class="col-difficulty">Difficulty</th>
+          <th class="col-model">Business Model</th>
+          <th class="col-type">Opportunity Type</th>
+          <th class="col-created">Created</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="opTableBody">
+        <!-- rows rendered by builder.js -->
+      </tbody>
+    </table>
+
+    <div class="empty-state" id="emptyState" hidden>
+      <h3 id="emptyStateHeading">No opportunities yet</h3>
+      <p id="emptyStateBody">Click <strong>+ Add Idea</strong> above to create your first one.</p>
+    </div>
+  </div>
+
+  <div class="table-footer">
+    <p class="table-footer-info" id="tableInfo"></p>
+    <div class="table-pagination">
+      <button type="button" class="btn btn-text" id="prevPageBtn" disabled>&larr; Prev</button>
+      <span class="page-indicator" id="pageIndicator">Page 1</span>
+      <button type="button" class="btn btn-text" id="nextPageBtn" disabled>Next &rarr;</button>
+      <select id="pageSizeSelect" aria-label="Rows per page">
+        <option value="25">25 / page</option>
+        <option value="50" selected>50 / page</option>
+        <option value="100">100 / page</option>
+        <option value="250">250 / page</option>
+      </select>
+    </div>
+  </div>
+
+</main>
+
+<!-- ================= OPPORTUNITY FORM MODAL ================= -->
+<div class="modal-overlay" id="formOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <div class="modal-header">
+      <h2 id="formTitle">Add Opportunity</h2>
+      <button type="button" class="modal-close" id="formCloseBtn" aria-label="Close form">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="opForm" novalidate>
+
+        <!-- Hidden system fields — never edited directly -->
+        <input type="hidden" id="opId">
+        <input type="hidden" id="opSlug">
+        <input type="hidden" id="opCreatedAt">
+
+        <p class="form-id-line" id="formIdLine" hidden>
+          ID: <code id="formIdDisplay"></code>
+          &nbsp;·&nbsp;
+          Slug: <code id="formSlugDisplay"></code>
+        </p>
+
+        <!-- ---- Basic information ---- -->
+        <section class="form-section">
+          <h3>Basic Information</h3>
+
+          <div class="field">
+            <label for="fieldTitle">Opportunity Title <span class="req">*</span></label>
+            <input type="text" id="fieldTitle" required autocomplete="off">
+          </div>
+
+          <div class="field">
+            <label for="fieldShortDesc">Short Description <span class="req">*</span> <span class="hint">(one or two sentences)</span></label>
+            <textarea id="fieldShortDesc" rows="2" required></textarea>
+          </div>
+
+          <div class="field">
+            <label for="fieldFullDesc">Full Description <span class="hint">(optional — for Page 3)</span></label>
+            <textarea id="fieldFullDesc" rows="5"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="fieldTags">Tags <span class="hint">(comma-separated)</span></label>
+            <input type="text" id="fieldTags" placeholder="e.g. garlic, restaurant supply, food" autocomplete="off">
+          </div>
+        </section>
+
+        <!-- ---- Classification ---- -->
+        <section class="form-section">
+          <h3>Classification</h3>
+
+          <div class="field-grid">
+            <div class="field field-span-2">
+              <label id="labelIndustry">Industry <span class="req">*</span> <span class="hint">(select one or more)</span></label>
+              <div class="checkbox-group checkbox-group-lg" id="groupIndustry" role="group" aria-labelledby="labelIndustry"></div>
+            </div>
+
+            <div class="field">
+              <label for="fieldCapital">Capital <span class="req">*</span></label>
+              <select id="fieldCapital" required>
+                <option value="">Select capital range…</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="fieldDifficulty">Difficulty <span class="req">*</span></label>
+              <select id="fieldDifficulty" required>
+                <option value="">Select difficulty…</option>
+              </select>
+            </div>
+
+            <div class="field field-span-2">
+              <label id="labelBusinessModel">Business Model <span class="req">*</span> <span class="hint">(select one or more)</span></label>
+              <div class="checkbox-group checkbox-group-lg" id="groupBusinessModel" role="group" aria-labelledby="labelBusinessModel"></div>
+            </div>
+
+            <div class="field field-span-2">
+              <label id="labelOpportunityType">Opportunity Type <span class="req">*</span> <span class="hint">(select one or more)</span></label>
+              <div class="checkbox-group checkbox-group-lg" id="groupOpportunityType" role="group" aria-labelledby="labelOpportunityType"></div>
+            </div>
+
+            <div class="field field-span-2">
+              <label id="labelAccess">Access <span class="req">*</span> <span class="hint">(select one or more)</span></label>
+              <div class="checkbox-group checkbox-group-lg" id="groupAccess" role="group" aria-labelledby="labelAccess"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Work style ---- -->
+        <section class="form-section">
+          <h3>Work Style</h3>
+
+          <div class="field-grid field-grid-4">
+            <div class="field">
+              <label for="fieldWorkLocation">Location <span class="req">*</span></label>
+              <select id="fieldWorkLocation" required>
+                <option value="">Select…</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fieldTime">Time <span class="req">*</span></label>
+              <select id="fieldTime" required>
+                <option value="">Select…</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fieldTeam">Team <span class="req">*</span></label>
+              <select id="fieldTeam" required>
+                <option value="">Select…</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fieldCustomer">Customer <span class="req">*</span></label>
+              <select id="fieldCustomer" required>
+                <option value="">Select…</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---- Scale / stage / resources ---- -->
+        <section class="form-section">
+          <h3>Scale, Stage &amp; Resources</h3>
+
+          <div class="field-grid">
+            <div class="field">
+              <label id="labelScale">Scale <span class="req">*</span></label>
+              <div class="checkbox-group" id="groupScale" role="group" aria-labelledby="labelScale"></div>
+            </div>
+            <div class="field">
+              <label id="labelStage">Stage <span class="req">*</span></label>
+              <div class="checkbox-group" id="groupStage" role="group" aria-labelledby="labelStage"></div>
+            </div>
+            <div class="field">
+              <label id="labelResources">Resources <span class="req">*</span></label>
+              <div class="checkbox-group" id="groupResources" role="group" aria-labelledby="labelResources"></div>
+            </div>
+          </div>
+        </section>
+
+        <div class="form-errors" id="formErrors" role="alert" hidden></div>
+
+      </form>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-text" id="formCancelBtn">Cancel</button>
+      <label class="save-and-new-check">
+        <input type="checkbox" id="saveAndNewCheck" checked>
+        Save &amp; add another
+      </label>
+      <button type="submit" form="opForm" class="btn btn-primary" id="formSaveBtn">Save Opportunity</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= IMPORT RESULTS MODAL ================= -->
+<div class="modal-overlay" id="importOverlay" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-header">
+      <h2 id="importTitle">Import Results</h2>
+      <button type="button" class="modal-close" id="importCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="importSummary"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" id="importOkBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EXPORT FILENAME MODAL ================= -->
+<div class="modal-overlay" id="exportOverlay" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+    <div class="modal-header">
+      <h2 id="exportTitle">Export JSON</h2>
+      <button type="button" class="modal-close" id="exportCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint" id="exportCountHint"></p>
+
+      <div class="field">
+        <label for="exportFilename">Filename</label>
+        <div class="filename-input">
+          <input type="text" id="exportFilename" placeholder="fishing-opportunities" autocomplete="off">
+          <span class="filename-suffix">.json</span>
+        </div>
+        <p class="field-note">No need to type “.json” — it's added automatically.</p>
+      </div>
+
+      <div class="manifest-helper" id="manifestHelper" hidden>
+        <label for="manifestSnippet">Manifest entry <span class="hint">(copy into data/manifest.json)</span></label>
+        <pre id="manifestSnippet"></pre>
+        <button type="button" class="btn btn-text" id="copyManifestBtn">Copy to clipboard</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-text" id="exportCancelBtn">Cancel</button>
+      <button type="button" class="btn btn-primary" id="exportConfirmBtn">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELETE CONFIRM MODAL ================= -->
+<div class="modal-overlay" id="deleteOverlay" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+    <div class="modal-header">
+      <h2 id="deleteTitle">Delete Opportunity</h2>
+    </div>
+    <div class="modal-body">
+      <p id="deleteMessage"></p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-text" id="deleteCancelBtn">Cancel</button>
+      <button type="button" class="btn btn-danger" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/filters-config.js"></script>
+<script src="builder.js"></script>
+</body>
+</html>
